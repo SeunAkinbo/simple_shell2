@@ -1,155 +1,160 @@
 #include "shell.h"
 
 /**
- * is_chain - test if current char in buffer is a chain delimeter
- * @info: the parameter struct
- * @buf: the char buffer
- * @p: address of current position in buf
+ * add_node - adds a node to the start of the list
+ * @head: address of pointer to head node
+ * @str: str field of node
+ * @num: node index used by history
  *
- * Return: 1 if chain delimeter, 0 otherwise
+ * Return: size of list
  */
-int is_chain(info_t *info, char *buf, size_t *p)
+list_t *add_node(list_t **head, const char *str, int num)
 {
-	size_t j = *p;
+	list_t *new_head;
 
-	if (buf[j] == '|' && buf[j + 1] == '|')
+	if (!head)
+		return (NULL);
+	new_head = malloc(sizeof(list_t));
+	if (!new_head)
+		return (NULL);
+	_memset((void *)new_head, 0, sizeof(list_t));
+	new_head->num = num;
+	if (str)
 	{
-		buf[j] = 0;
-		j++;
-		info->cmd_buf_type = CMD_OR;
+		new_head->str = _strdup(str);
+		if (!new_head->str)
+		{
+			free(new_head);
+			return (NULL);
+		}
 	}
-	else if (buf[j] == '&' && buf[j + 1] == '&')
+	new_head->next = *head;
+	*head = new_head;
+	return (new_head);
+}
+
+/**
+ * add_node_end - adds a node to the end of the list
+ * @head: address of pointer to head node
+ * @str: str field of node
+ * @num: node index used by history
+ *
+ * Return: size of list
+ */
+list_t *add_node_end(list_t **head, const char *str, int num)
+{
+	list_t *new_node, *node;
+
+	if (!head)
+		return (NULL);
+
+	node = *head;
+	new_node = malloc(sizeof(list_t));
+	if (!new_node)
+		return (NULL);
+	_memset((void *)new_node, 0, sizeof(list_t));
+	new_node->num = num;
+	if (str)
 	{
-		buf[j] = 0;
-		j++;
-		info->cmd_buf_type = CMD_AND;
+		new_node->str = _strdup(str);
+		if (!new_node->str)
+		{
+			free(new_node);
+			return (NULL);
+		}
 	}
-	else if (buf[j] == ';') /* found end of this command */
+	if (node)
 	{
-		buf[j] = 0; /* replace semicolon with null */
-		info->cmd_buf_type = CMD_CHAIN;
+		while (node->next)
+			node = node->next;
+		node->next = new_node;
 	}
 	else
+		*head = new_node;
+	return (new_node);
+}
+
+/**
+ * print_list_str - prints only the str element of a list_t linked list
+ * @h: pointer to first node
+ *
+ * Return: size of list
+ */
+size_t print_list_str(const list_t *h)
+{
+	size_t i = 0;
+
+	while (h)
+	{
+		_puts(h->str ? h->str : "(nil)");
+		_puts("\n");
+		h = h->next;
+		i++;
+	}
+	return (i);
+}
+
+/**
+ * delete_node_at_index - deletes node at given index
+ * @head: address of pointer to first node
+ * @index: index of node to delete
+ *
+ * Return: 1 on success, 0 on failure
+ */
+int delete_node_at_index(list_t **head, unsigned int index)
+{
+	list_t *node, *prev_node;
+	unsigned int i = 0;
+
+	if (!head || !*head)
 		return (0);
-	*p = j;
-	return (1);
-}
 
-/**
- * check_chain - checks we should continue chaining based on last status
- * @info: the parameter struct
- * @buf: the char buffer
- * @p: address of current position in buf
- * @i: starting position in buf
- * @len: length of buf
- *
- * Return: Void
- */
-void check_chain(info_t *info, char *buf, size_t *p, size_t i, size_t len)
-{
-	size_t j = *p;
-
-	if (info->cmd_buf_type == CMD_AND)
+	if (!index)
 	{
-		if (info->status)
-		{
-			buf[i] = 0;
-			j = len;
-		}
+		node = *head;
+		*head = (*head)->next;
+		free(node->str);
+		free(node);
+		return (1);
 	}
-	if (info->cmd_buf_type == CMD_OR)
+	node = *head;
+	while (node)
 	{
-		if (!info->status)
+		if (i == index)
 		{
-			buf[i] = 0;
-			j = len;
+			prev_node->next = node->next;
+			free(node->str);
+			free(node);
+			return (1);
 		}
-	}
-
-	*p = j;
-}
-
-/**
- * replace_alias - replaces an aliases in the tokenized string
- * @info: the parameter struct
- *
- * Return: 1 if replaced, 0 otherwise
- */
-int replace_alias(info_t *info)
-{
-	int i;
-	list_t *node;
-	char *p;
-
-	for (i = 0; i < 10; i++)
-	{
-		node = node_starts_with(info->alias, info->argv[0], '=');
-		if (!node)
-			return (0);
-		free(info->argv[0]);
-		p = _strchr(node->str, '=');
-		if (!p)
-			return (0);
-		p = _strdup(p + 1);
-		if (!p)
-			return (0);
-		info->argv[0] = p;
-	}
-	return (1);
-}
-
-/**
- * replace_vars - replaces vars in the tokenized string
- * @info: the parameter struct
- *
- * Return: 1 if replaced, 0 otherwise
- */
-int replace_vars(info_t *info)
-{
-	int i = 0;
-	list_t *node;
-
-	for (i = 0; info->argv[i]; i++)
-	{
-		if (info->argv[i][0] != '$' || !info->argv[i][1])
-			continue;
-
-		if (!_strcmp(info->argv[i], "$?"))
-		{
-			replace_string(&(info->argv[i]),
-				_strdup(convert_number(info->status, 10, 0)));
-			continue;
-		}
-		if (!_strcmp(info->argv[i], "$$"))
-		{
-			replace_string(&(info->argv[i]),
-				_strdup(convert_number(getpid(), 10, 0)));
-			continue;
-		}
-		node = node_starts_with(info->env, &info->argv[i][1], '=');
-		if (node)
-		{
-			replace_string(&(info->argv[i]),
-				_strdup(_strchr(node->str, '=') + 1));
-			continue;
-		}
-		replace_string(&info->argv[i], _strdup(""));
-
+		i++;
+		prev_node = node;
+		node = node->next;
 	}
 	return (0);
 }
 
 /**
- * replace_string - replaces string
- * @old: address of old string
- * @new: new string
+ * free_list - frees all nodes of a list
+ * @head_ptr: address of pointer to head node
  *
- * Return: 1 if replaced, 0 otherwise
+ * Return: void
  */
-int replace_string(char **old, char *new)
+void free_list(list_t **head_ptr)
 {
-	free(*old);
-	*old = new;
-	return (1);
+	list_t *node, *next_node, *head;
+
+	if (!head_ptr || !*head_ptr)
+		return;
+	head = *head_ptr;
+	node = head;
+	while (node)
+	{
+		next_node = node->next;
+		free(node->str);
+		free(node);
+		node = next_node;
+	}
+	*head_ptr = NULL;
 }
 
