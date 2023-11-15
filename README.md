@@ -1,4 +1,4 @@
-** CODING MY - SIMPLE SHELL **
+# CODING SIMPLE SHELL BY AKINBO OLUWASEUN**
 
 
 # Simple Shell Project
